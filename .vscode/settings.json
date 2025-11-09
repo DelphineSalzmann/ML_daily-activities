@@ -1,7 +1,0 @@
-{
-    "python.defaultInterpreterPath": ".gitignore/venv/Scripts/python.exe",
-    "python.analysis.extraPaths": [
-        ".gitignore/venv/Lib/site-packages"
-    ],
-    "python.analysis.useLibraryCodeForTypes": true
-}
