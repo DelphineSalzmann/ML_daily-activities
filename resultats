@@ -1,0 +1,39 @@
+##--Avec GridSearch et cv
+
+-- Résultats de la recherche d'hyperparamètres ---
+Meilleurs paramètres trouvés : {'bootstrap': False, 'max_depth': None, 'min_samples_leaf': 1, 'min_samples_split': 2, 'n_estimators': 200}
+Meilleure accuracy moyenne en CV : 0.9957509835034315
+
+Classification Report:
+               precision    recall  f1-score   support
+
+           0       1.00      1.00      1.00        96
+           1       1.00      0.99      0.99        96
+           2       1.00      1.00      1.00        96
+           3       1.00      1.00      1.00        96
+           4       0.99      1.00      0.99        96
+           5       1.00      1.00      1.00        96
+           6       0.98      0.97      0.97        96
+           7       0.95      0.97      0.96        96
+           8       1.00      1.00      1.00        96
+           9       1.00      1.00      1.00        96
+          10       1.00      1.00      1.00        96
+          11       1.00      1.00      1.00        96
+          12       0.98      1.00      0.99        96
+          13       1.00      1.00      1.00        96
+          14       1.00      1.00      1.00        96
+          15       1.00      1.00      1.00        96
+          16       1.00      1.00      1.00        96
+          17       1.00      1.00      1.00        96
+          18       1.00      0.97      0.98        96
+
+    accuracy                           0.99      1824
+   macro avg       0.99      0.99      0.99      1824
+weighted avg       0.99      0.99      0.99      1824
+
+Accuracy entraînement : 1.000
+Accuracy test : 0.995
+
+-- Résultats ANN
+--- Final Evaluation on Test Set ---
+Final Test Accuracy: 0.9896
