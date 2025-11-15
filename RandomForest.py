@@ -10,14 +10,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 # Bibliothèques scikit-learn
-from sklearn.model_selection import StratifiedKFold, train_test_split, cross_validate, cross_val_score, GridSearchCV
+from sklearn.model_selection import StratifiedKFold, train_test_split, cross_validate, cross_val_score, GridSearchCV, LeaveOneGroupOut
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import (
-    confusion_matrix,
-    classification_report,
-    accuracy_score
-)
+from sklearn.metrics import (confusion_matrix, classification_report, accuracy_score)
 
 # --- Configuration ---
 # Paramètres basés sur la description du dataset (README.md)
@@ -27,10 +23,15 @@ NUM_SEGMENTS_PER_SUBJECT = 60
 NUM_SENSORS = 45
 SAMPLES_PER_SEGMENT = 125 # 5 sec * 25 Hz = 125 échantillons par segment
 
+config={'features':180}
+
 # Chemin vers le dossier de données (relatif au script)
 DATA_BASE_PATH = os.path.join(os.path.dirname(__file__), 'data')
 # Fichier pour stocker les données prétraitées et accélérer les lancements futurs
-PROCESSED_DATA_FILE = 'processed_data.npz'
+if config['features'] == 90:
+    PROCESSED_DATA_FILE = 'processed_data_90features.npz'
+else:
+    PROCESSED_DATA_FILE = 'processed_data_180features.npz'
 
 # Paramètres pour le Machine Learning
 N_SPLITS_CV = 5 # Nombre de "folds" (plis) pour la validation croisée
@@ -39,7 +40,7 @@ RANDOM_STATE = 42 # Garantit que les divisions aléatoires sont reproductibles
 
 # ---1. Charger les données ---
 
-X_raw, y = load_all_data(DATA_BASE_PATH, NUM_ACTIVITIES, NUM_SUBJECTS)
+X_raw, y, groups = load_all_data(DATA_BASE_PATH, NUM_ACTIVITIES, NUM_SUBJECTS)
 num_features = X_raw.shape[1]
 num_classes = NUM_ACTIVITIES
 
@@ -96,17 +97,18 @@ def best_model():
 best_rf = RandomForestClassifier(random_state=RANDOM_STATE, bootstrap= False, max_depth= None, min_samples_leaf= 1, min_samples_split= 2, n_estimators= 200)
 
 
-# ## --5. Validation croisée ---
+## --5. Validation croisée ---
 
-# print("Démarage de la validation croisée")
-# cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=RANDOM_STATE)
-# scores = cross_val_score(best_rf, X_train, y_train, cv=cv, scoring="accuracy")
-# print(scores)
-# print("Accuracy moyenne CV :", scores.mean())
-# print("Écart type CV :", scores.std())
+def validiation_croisée():
+    print("Démarage de la validation croisée")
+    cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=RANDOM_STATE)
+    scores = cross_val_score(best_rf, X_train, y_train, cv=cv, scoring="accuracy")
+    print(scores)
+    print("Accuracy moyenne CV :", scores.mean())
+    print("Écart type CV :", scores.std())
 
 
-# ## --6. Entraînement et validation finale sur le jeu de test ---
+## --6. Entraînement et validation finale sur le jeu de test ---
 
 best_rf.fit(X_train, y_train)
 y_pred = best_rf.predict(X_test)
@@ -116,25 +118,23 @@ print("Accuracy :", accuracy_score(y_test, y_pred))
 print("\nClassification Report:\n", classification_report(y_test, y_pred))
 
 # # Comparaison avec accuracy d'entraînement
-# train_acc = accuracy_score(y_train, best_rf.predict(X_train))
-# test_acc = accuracy_score(y_test, y_pred)
-# print(f"Accuracy entraînement : {train_acc:.3f}")
-# print(f"Accuracy test : {test_acc:.3f}")
+train_acc = accuracy_score(y_train, best_rf.predict(X_train))
+test_acc = accuracy_score(y_test, y_pred)
+print(f"Accuracy entraînement : {train_acc:.3f}")
+print(f"Accuracy test : {test_acc:.3f}")
 
-# # --- 7. Matrice de confusion ---
-# cm_test = confusion_matrix(y_test, y_pred)
-# plt.figure(figsize=(12, 10))
-# sns.heatmap(cm_test, annot=True, fmt='d', cmap='Blues', 
-#             xticklabels=[f"A{i+1}" for i in range(num_classes)], 
-#             yticklabels=[f"A{i+1}" for i in range(num_classes)])
-# plt.title('Matrice de Confusion Finale sur le Test Set')
-# plt.xlabel('Prédictions')
-# plt.ylabel('Vraies étiquettes (Labels)')
-# plt.show()
+# --- 7. Matrice de confusion ---
+cm_test = confusion_matrix(y_test, y_pred)
+plt.figure(figsize=(12, 10))
+sns.heatmap(cm_test, annot=True, fmt='d', cmap='Blues', 
+            xticklabels=[f"A{i+1}" for i in range(num_classes)], 
+            yticklabels=[f"A{i+1}" for i in range(num_classes)])
+plt.title('Matrice de Confusion Finale sur le Test Set')
+plt.xlabel('Prédictions')
+plt.ylabel('Vraies étiquettes (Labels)')
+plt.show()
 
 
-
-# #section pour tracer l’importance des features du modèle final 
 ###--- 8. Impureté de Gini ---
 
 def foret_gini(rf):
@@ -158,9 +158,7 @@ def foret_gini(rf):
 #foret_gini(best_rf)
 
 
-
-
-##--- 9. Effet du nombre d'arbres n_estimators ---
+##--- 9. Effet de 3 paramètres : nombre d'arbres, nombre min d'échantillons par feuille et profondeur max ---
 def Influence_n_estimators():
     n_estimators_options = [10, 50, 100, 200, 300, 400, 500]
     train_accuracies = []
@@ -210,8 +208,6 @@ def Influence_n_estimators():
 
     plt.xlabel('Nombre d\'arbres')
     plt.show()
-
-#Influence_n_estimators()
 
 def Influence_nleaf():
     n_min_samples_leaf_options = [1,5,10,50,100,1000]
@@ -263,8 +259,6 @@ def Influence_nleaf():
     plt.xlabel('Nombre minimal d\'échantiillon par feuille')
     plt.show()
 
-#Influence_nleaf()
-
 def Influence_max_depth():
     n_max_depth_options = [5,10,20,30, None]
     train_accuracies = []
@@ -315,4 +309,7 @@ def Influence_max_depth():
     plt.xlabel('Pronfondeur maximale des arbres')
     plt.show()
 
-Influence_max_depth()
+
+#Influence_n_estimators()
+#Influence_nleaf()
+#Influence_max_depth()

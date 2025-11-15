@@ -1,8 +1,5 @@
 # To Begin
 
-Run the file Create_data in order to be able to use them
-
-
 
 # Data base description
 Each of the 19 activities is performed by eight subjects (4 female, 4 male, between the ages 20 and 30) for 5 minutes.

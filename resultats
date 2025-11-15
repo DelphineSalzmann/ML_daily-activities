@@ -1,3 +1,17 @@
+## LOSO
+--- Résultats de la recherche d'hyperparamètres (LOSO) ---
+Meilleurs paramètres : {'bootstrap': True, 'max_depth': None, 'min_samples_leaf': 2, 'min_samples_split': 2, 'n_estimators': 200}
+Meilleure accuracy moyenne (LOSO) : 0.9415570175438597
+RandomForestClassifier(min_samples_leaf=2, n_estimators=200, random_state=42)
+
+Cross_validation:
+[0.91140351 0.95175439 0.97894737 0.93421053 0.9754386  0.95701754  0.95  0.87368421]
+Accuracy moyenne CV : 0.9415570175438597
+Écart type CV : 0.032653906422472394
+
+
+
+
 ##--Avec GridSearch et cv
 
 -- Résultats de la recherche d'hyperparamètres ---
