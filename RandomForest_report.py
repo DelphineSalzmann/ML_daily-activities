@@ -4,7 +4,7 @@ import numpy as np
 import time
 
 # Importer la fonction de création de données
-from Create_data import load_all_data
+from Get_data import load_all_data
 
 # Bibliothèques de visualisation
 import matplotlib.pyplot as plt
@@ -16,6 +16,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import confusion_matrix, classification_report, accuracy_score, roc_curve, auc, precision_recall_curve, average_precision_score
 from sklearn.preprocessing import label_binarize
+
 # --- Configuration ---
 # Paramètres basés sur la description du dataset (README.md)
 NUM_ACTIVITIES = 19
@@ -103,22 +104,13 @@ def best_model(param_grid):
     return grid_search
 
 
-# grid_search = best_model(param_grid = {
-#         'n_estimators': [100,200],
-#         'max_depth': [None, 10, 20],
-#         'min_samples_split': [2, 5],
-#         'min_samples_leaf': [1, 2, 4],
-#         'bootstrap': [True, False]
-#     })
-# best_rf = grid_search.best_estimator_
-# print(best_rf)
-
 # ou bien, une fois qu'on a déjà les meilleurs paramètres :
 best_rf = RandomForestClassifier(random_state=RANDOM_STATE, bootstrap= True, max_depth= None, min_samples_leaf= 2, min_samples_split= 2, n_estimators= 200)
 
-## -- Vallidation croisée LOSO et matrice de confusion ---
+## -- Vallidation croisée LOSO, matrice de confusion et courbes ROC et PR ---
 
 def validation_LOSO(rf):
+    '''Scores du modèle par validation croisée LOSO'''
 
     logo = LeaveOneGroupOut()
 
@@ -174,6 +166,7 @@ def validation_LOSO(rf):
     return cm, np.array(y_true_all),y_score_all
 
 def plot_confusion(cm):
+    '''Afficher la matrice de confusion comme agrégation des résultats des différents tests sur tous les sujets'''
     plt.figure(figsize=(12, 10))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
                 xticklabels=[f"A{i+1}" for i in range(num_classes)], 
@@ -183,14 +176,56 @@ def plot_confusion(cm):
     plt.ylabel('Vraies étiquettes (Labels)')
     plt.show()
 
-# cm, y_true_all, y_score_all=validation_LOSO()
-# print(cm)
-# plot_confusion(cm)
+def plot_ROC(y_true_all, y_score_all):
+    '''Afficher la courbe ROC par activité à partir des résultats de la validation croisée LOSO'''
+    # --- noms des classes ---
+    n_classes = 19
+    class_names = [f"A{i+1}" for i in range(n_classes)]  # juste pour l'affichage
+    y_true_bin = label_binarize(y_true_all, classes=np.arange(n_classes))
+
+    plt.figure(figsize=(12, 10))
+
+    # --- ROC curve par classe ---
+    for i, cls in enumerate(class_names):
+        fpr, tpr, _ = roc_curve(y_true_bin[:, i], y_score_all[:, i])
+        roc_auc = auc(fpr, tpr)
+        plt.plot(fpr, tpr, lw=2, label=f"{cls} (AUC={roc_auc:.3f})")
+
+    plt.plot([0, 1], [0, 1], 'k--', lw=1)  # ligne diagonale
+    plt.xlabel("Taux de faux positifs (FPR)")
+    plt.ylabel("Taux de vrais positifs (TPR)")
+    plt.title("Courbes ROC par classe (19 activités)")
+    plt.legend(loc="lower right", fontsize=8)
+    plt.grid(True)
+    plt.show()
+
+def plot_PR(y_true_all, y_score_all):
+    '''Afficher les courbes PR par classe à partir des résultats issus de la validation croisée LOSO'''
+    # --- noms des classes ---
+    n_classes = 19
+    class_names = [f"A{i+1}" for i in range(n_classes)]  # juste pour l'affichage
+    y_true_bin = label_binarize(y_true_all, classes=np.arange(n_classes))
+
+    plt.figure(figsize=(12, 10))
+
+    # --- PR curve par classe ---
+    for i in range(n_classes):
+        precision, recall, _ = precision_recall_curve(y_true_bin[:, i], y_score_all[:, i])
+        ap = average_precision_score(y_true_bin[:, i], y_score_all[:, i])
+        plt.plot(recall, precision, lw=2, label=f"{class_names[i]} (AP={ap:.3f})")
+
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.title("Courbes Précision–Rappel")
+    plt.legend(loc="lower left", fontsize=8)
+    plt.grid(True)
+    plt.show()
+
 
 ### -- Validation croisée Stratified k-fold (pour comparaison) et matrice de confusion
 
 def validiation_croisée(rf):
-
+    '''Validation croisée avec la méthode StratifiedKFold'''
     X_train, X_test, y_train, y_test = train_test_split(X_raw, y, test_size=0.2, random_state=RANDOM_STATE, stratify=y)
     print("Démarage de la validation croisée")
     cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=RANDOM_STATE)
@@ -200,6 +235,7 @@ def validiation_croisée(rf):
     print("Écart type CV :", scores.std())
 
 def CM(rf):
+    '''Afficher la matrice de confusion pour un entraînement/test 80%/20%'''
     X_train, X_test, y_train, y_test = train_test_split(X_raw, y, test_size=0.2, random_state=RANDOM_STATE, stratify=y)
     rf.fit(X_train, y_train)
     y_pred = best_rf.predict(X_test)
@@ -214,7 +250,7 @@ def CM(rf):
     print(f"Accuracy entraînement : {train_acc:.3f}")
     print(f"Accuracy test : {test_acc:.3f}")
 
-    # --- 7. Matrice de confusion ---
+    # Matrice de confusion
     cm_test = confusion_matrix(y_test, y_pred)
     plt.figure(figsize=(12, 10))
     sns.heatmap(cm_test, annot=True, fmt='d', cmap='Blues', 
@@ -228,6 +264,7 @@ def CM(rf):
 ###--- Impureté de Gini ---
 
 def foret_gini(trained_rf):
+    '''Impureté de Gini par arbre'''
     tree_ginis = []
     for tree in trained_rf.estimators_:
         impurity = tree.tree_.impurity
@@ -237,6 +274,7 @@ def foret_gini(trained_rf):
     return tree_ginis
 
 def plot_gini(rf):
+    '''Afficher l'histogramme des impuretés de Gini'''
     tree_ginis=foret_gini(rf)
     plt.figure(figsize=(10,6))
     plt.bar(range(1, len(tree_ginis)+1), tree_ginis, color='skyblue')
@@ -247,8 +285,8 @@ def plot_gini(rf):
     plt.legend()
     plt.show()
     
-
 def calcul_gini(sujet, rf):
+    '''Calculer les impuretés de Gini et les afficher à partir du modèle entraîné'''
     X_train,X_test,y_train,y_test=Train_Test(2)
     rf.fit(X_train,y_train)
     plot_gini(rf)
@@ -256,7 +294,7 @@ def calcul_gini(sujet, rf):
 
 ##--- Effet de 3 paramètres : nombre d'arbres, nombre min d'échantillons par feuille et profondeur max ---
 def Influence_n_estimators_LOSO(sujets_exclus):
-
+    '''Variation de n_estimators'''
     n_estimators_options = [10, 50, 100, 200, 300, 400, 500]
 
     logo = LeaveOneGroupOut()
@@ -314,7 +352,7 @@ def Influence_n_estimators_LOSO(sujets_exclus):
     plt.show()
 
 def Influence_nleaf_LOSO(sujets_exclus):
-
+    '''Variation de min_samples_leaf'''
     n_min_samples_leaf_options = [1,2,5,10,50,100]
 
     logo = LeaveOneGroupOut()
@@ -373,6 +411,7 @@ def Influence_nleaf_LOSO(sujets_exclus):
     plt.show()
 
 def Influence_max_depth_LOSO(sujets_exclus):
+    '''Variation de max_depth'''
 
     n_max_depth_options = [5,10,20,30]
 
@@ -429,55 +468,3 @@ def Influence_max_depth_LOSO(sujets_exclus):
 
     plt.show()
 
-#Influence_n_estimators_LOSO([1,2,3,4,5,6,7,8])
-#Influence_nleaf_LOSO([1,2,3,4,5,6,7,8])
-#Influence_max_depth_LOSO([1,2,3,4,5,6,7,8])
-
-def plot_ROC(y_true_all, y_score_all):
- 
-    # --- noms des classes ---
-    n_classes = 19
-    class_names = [f"A{i+1}" for i in range(n_classes)]  # juste pour l'affichage
-    y_true_bin = label_binarize(y_true_all, classes=np.arange(n_classes))
-
-    plt.figure(figsize=(12, 10))
-
-    # --- ROC curve par classe ---
-    for i, cls in enumerate(class_names):
-        fpr, tpr, _ = roc_curve(y_true_bin[:, i], y_score_all[:, i])
-        roc_auc = auc(fpr, tpr)
-        plt.plot(fpr, tpr, lw=2, label=f"{cls} (AUC={roc_auc:.3f})")
-
-    plt.plot([0, 1], [0, 1], 'k--', lw=1)  # ligne diagonale
-    plt.xlabel("Taux de faux positifs (FPR)")
-    plt.ylabel("Taux de vrais positifs (TPR)")
-    plt.title("Courbes ROC par classe (19 activités)")
-    plt.legend(loc="lower right", fontsize=8)
-    plt.grid(True)
-    plt.show()
-
-def plot_PR(y_true_all, y_score_all):
-
-    # --- noms des classes ---
-    n_classes = 19
-    class_names = [f"A{i+1}" for i in range(n_classes)]  # juste pour l'affichage
-    y_true_bin = label_binarize(y_true_all, classes=np.arange(n_classes))
-
-    plt.figure(figsize=(12, 10))
-
-    # --- PR curve par classe ---
-    for i in range(n_classes):
-        precision, recall, _ = precision_recall_curve(y_true_bin[:, i], y_score_all[:, i])
-        ap = average_precision_score(y_true_bin[:, i], y_score_all[:, i])
-        plt.plot(recall, precision, lw=2, label=f"{class_names[i]} (AP={ap:.3f})")
-
-    plt.xlabel("Recall")
-    plt.ylabel("Precision")
-    plt.title("Courbes Précision–Rappel")
-    plt.legend(loc="lower left", fontsize=8)
-    plt.grid(True)
-    plt.show()
-
-#cm, y_true_all,y_score_all = validation_LOSO()
-# plot_ROC(y_true_all,y_score_all)
-# plot_PR(y_true_all,y_score_all)

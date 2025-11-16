@@ -29,6 +29,9 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
+#Données
+from Get_data import load_all_data
+
 # --- Reproductibilité ---
 # Fixer les graines aléatoires assure que les résultats (initialisation des poids, 
 # divisions de données) sont identiques à chaque exécution.
@@ -109,119 +112,9 @@ else:
 
 print(f"Config active: {config}")
 
-# %% ------------------------------------------------------------------
-# 3. FONCTIONS DE CHARGEMENT ET D'EXTRACTION
-# --------------------------------------------------------------------
-
-def load_segments_for_activity_person(base_path, activity_id, person_id):
-    """
-    Charge les 60 segments (fichiers s01.txt à s60.txt) pour une activité 
-    et une personne données. Gère les fichiers manquants ou corrompus.
-    """
-    folder_path = os.path.join(base_path, f"a{activity_id:02d}", f"p{person_id}")
-    
-    if not os.path.exists(folder_path):
-        print(f"AVERTISSEMENT: Dossier non trouvé, ignoré : {folder_path}")
-        return None
-        
-    all_segments_data = []
-    for i in range(1, NUM_SEGMENTS_PER_SUBJECT + 1):
-        filename = f"s{i:02d}.txt"
-        file_path = os.path.join(folder_path, filename)
-        
-        if not os.path.exists(file_path):
-            continue
-            
-        try:
-            segment_data = np.loadtxt(file_path, delimiter=',')
-            # Vérification critique de la forme (shape) des données
-            if segment_data.shape == (SAMPLES_PER_SEGMENT, NUM_SENSORS):
-                all_segments_data.append(segment_data)
-            else:
-                print(f"ERREUR: Forme incorrecte dans {filename}. Attendu {(SAMPLES_PER_SEGMENT, NUM_SENSORS)}, Reçu {segment_data.shape}")
-        except Exception as e:
-            print(f"ERREUR: Impossible de charger {filename}. Détail : {str(e)}")
-    
-    return all_segments_data if all_segments_data else None
-
-def extract_features(segment_data):
-    """
-    Transforme un segment temporel (125, 45) en un vecteur de caractéristiques.
-    C'est l'étape d'Ingénierie des Caractéristiques (Feature Engineering).
-    Le nombre de features (90 ou 180) dépend de la config globale.
-    """
-    features = []
-    
-    # Gérer les segments manquants (None)
-    if segment_data is None:
-        num_stats = 2 if config['features'] == 90 else 4
-        return np.full(NUM_SENSORS * num_stats, np.nan)
-
-    # Boucle sur chacun des 45 capteurs (colonnes)
-    for sensor_col in range(NUM_SENSORS):
-        sensor_signal = segment_data[:, sensor_col]
-        
-        # Caractéristiques de base (toujours incluses)
-        features.append(np.mean(sensor_signal))
-        features.append(np.std(sensor_signal))
-        
-        # Ajoute min/max UNIQUEMENT si le scénario de test le demande
-        if config['features'] == 180:
-            features.append(np.min(sensor_signal))
-            features.append(np.max(sensor_signal))
-            
-    return np.array(features)
-
-def load_all_data(base_path, num_activities, num_subjects):
-    """
-    Orchestre le chargement de tous les fichiers, l'extraction de caractéristiques
-    et l'imputation des données manquantes.
-    """
-    all_features = []
-    all_labels = []
-    all_groups = []   # Stocke l'ID du sujet (person_id) pour la CV LOSO
-    print("Démarrage du chargement des données et de l'extraction de caractéristiques...")
-    
-    for activity_label in range(num_activities):
-        for person_id in range(1, num_subjects + 1):
-            segments = load_segments_for_activity_person(
-                base_path, activity_label + 1, person_id
-            )
-            
-            if segments:
-                for segment in segments:
-                    features = extract_features(segment)
-                    if features is not None:
-                        all_features.append(features)
-                        all_labels.append(activity_label)
-                        all_groups.append(person_id) # Enregistrer le sujet
-
-    print(f"Chargement terminé. {len(all_features)} segments trouvés.")
-    
-    if not all_features:
-        raise ValueError("Aucune caractéristique n'a été extraite. Vérifiez les chemins et la configuration.")
-
-    X = np.array(all_features)
-    y = np.array(all_labels)
-    groups = np.array(all_groups)    
-    
-    # --- Gestion des Données Manquantes (NaN) ---
-    print("Gestion des valeurs manquantes (imputation)...")
-    nan_count = np.isnan(X).sum()
-    print(f"Nombre de NaN avant imputation: {nan_count}")
-
-    if nan_count > 0:
-        # Remplace tous les NaN par la moyenne de leur colonne (feature)
-        imputer = SimpleImputer(strategy='mean')
-        X = imputer.fit_transform(X)
-        print(f"Nombre de NaN après imputation: {np.isnan(X).sum()}")
-    else:
-        print("Aucune valeur NaN détectée.")
-
-    return X, y, groups   
 
 # %% ------------------------------------------------------------------
-# 4. CHARGEMENT DES DONNÉES (AVEC CACHE)
+# 3. CHARGEMENT DES DONNÉES (AVEC CACHE)
 # --------------------------------------------------------------------
 # Évite de recalculer l'extraction de features (très long) à chaque exécution.
 # Le nom du fichier cache est défini dynamiquement dans la Section 2.
@@ -254,7 +147,7 @@ print("Distribution des sujets (subject_id: count):", dict(sorted(Counter(groups
 print(f"Nombre total de sujets : {len(np.unique(groups))}")
 
 # %% ------------------------------------------------------------------
-# 5. DÉFINITION DU MODÈLE ANN (MLP)
+# 4. DÉFINITION DU MODÈLE ANN (MLP)
 # --------------------------------------------------------------------
 
 def create_model():
@@ -312,7 +205,7 @@ model_summary = create_model()
 model_summary.summary()
 
 # %% ------------------------------------------------------------------
-# 6. VALIDATION CROISÉE "MIXTE" (StratifiedKFold)
+# 5. VALIDATION CROISÉE "MIXTE" (StratifiedKFold)
 # --------------------------------------------------------------------
 print("\n--- Démarrage de la Validation Croisée (StratifiedKFold) ---")
 
@@ -368,7 +261,7 @@ print(f"Écart-type (Stabilité): {np.std(fold_accuracies):.4f}")
 print(f"Temps total CV: {end_time_cv - start_time_cv:.2f} secondes")
 
 # %% ------------------------------------------------------------------
-# 6b. VALIDATION "RÉALISTE" (Leave-One-Subject-Out)
+# 5b. VALIDATION "RÉALISTE" (Leave-One-Subject-Out)
 # --------------------------------------------------------------------
 print("\n--- Validation Leave-One-Subject-Out (LOSO) ---")
 # LOGO est le test de généralisation inter-sujet.
@@ -435,7 +328,7 @@ print(f"Temps total LOSO: {end_time_loso - start_time_loso:.2f} secondes")
 
 
 # %% ------------------------------------------------------------------
-# 7. ENTRAÎNEMENT FINAL ET ÉVALUATION SUR LE TEST SET
+# 6. ENTRAÎNEMENT FINAL ET ÉVALUATION SUR LE TEST SET
 # --------------------------------------------------------------------
 print("\n--- Entraînement Final sur 80% des données ---")
 
@@ -472,7 +365,7 @@ end_time_final = time.time()
 print(f"Temps total Entraînement Final: {end_time_final - start_time_final:.2f} secondes")
 
 # %% ------------------------------------------------------------------
-# 8. ÉVALUATION FINALE (sur Test Set)
+# 7. ÉVALUATION FINALE (sur Test Set)
 # --------------------------------------------------------------------
 print("\n--- Évaluation Finale sur le Test Set (Données Inconnues) ---")
 
@@ -500,7 +393,7 @@ print(f"Score AUC (Moyenne Pondérée): {auc_weighted:.4f}")
 
 
 # %% ------------------------------------------------------------------
-# 9. FONCTIONS DE VISUALISATION (Helpers)
+# 8. FONCTIONS DE VISUALISATION (Helpers)
 # --------------------------------------------------------------------
 # Ces fonctions sont appelées dans la section 10 pour générer les sorties graphiques.
 
@@ -650,7 +543,7 @@ def plot_fold_metrics(fold_results, title_prefix='', filename=None):
     plt.show()
 
 # %% ------------------------------------------------------------------
-# 10. EXÉCUTION DES VISUALISATIONS
+# 9. EXÉCUTION DES VISUALISATIONS
 # --------------------------------------------------------------------
 print(f"\n--- Génération des visualisations pour le scénario : {TEST_SCENARIO} ---")
 # Crée un suffixe unique pour tous les fichiers de sortie de ce scénario
