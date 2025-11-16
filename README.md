@@ -1,7 +1,72 @@
-# To Begin
+##  Guide d'utilisation
+
+Le code présente deux modèles de prédiction d'activités quotidiennes à partir de données issus de capteurs sur 8 sujets (voir la section suivante pour la description de la base de données) : un modèle de réseau de neurones artificiels (ANN) et un modèle de forêt aléatoire (Random Forest).
+Pour que le script fonctionne, le dossier data doit être placé dans le même répertoire que les scripts ann_report.py, mainRandomForest.py, RandomForest_report.py et Get_data.py.
+
+    # ANN
+
+    Le script Python ann_report.py entraîne et évalue le modèle de Réseau de Neurones Artificiels (ANN) pour la classification des 19 activités humaines. Il est conçu pour être configurable, permettant de reproduire tous les tests de l'analyse de sensibilité présentés dans ce rapport.
+
+    Toute la configuration des tests se gère via la variable TEST_SCENARIO en Section 2.
+        Le script est configuré par défaut pour exécuter le modèle final optimisé (TEST_SCENARIO = "CHAMPION").
+
+        Pour reproduire les autres tests présentés dans le rapport, modifiez simplement la variable TEST_SCENARIO  (ligne 40) par l'une des valeurs suivantes et relancez le script :
+            "BASELINE": Reproduit le modèle initial (Dropout 0.1/0.4, Batch Size 64) .
+            "TEST_NO_DROPOUT": Reproduit le test sans aucune régularisation Dropout .
+            "TEST_MINMAX_SCALER": Reproduit le test en remplaçant le StandardScaler par un MinMaxScaler .
+            "TEST_SIMPLE_ARCHI": Reproduit le test avec l'architecture simplifiée 64x32 .
+            "TEST_90_FEATURES": Reproduit le test utilisant seulement 90 features (mean, std).
+            Note : Ce test créera un fichier cache séparé (processed_data_90features.npz) .
+
+    Pour chaque scénario exécuté, le script va :
+
+        Afficher dans la console : Les métriques clés, incluant la précision moyenne de la CV Stratifiée , la précision moyenne de la CV LOSO (généralisation) , et la précision finale sur le Test Set.
+
+        Sauvegarder les graphiques : Tous les graphiques (Courbes d'apprentissage, Matrices de confusion, Courbes ROC) sont sauvegardés en .png dans le dossier.
+
+        Suffixe de Fichiers : Tous les fichiers de sortie (graphiques, modèle .h5, scaler .pkl) sont suffixés avec le nom du scénario (ex: cm_loso_champion.png, final_model_champion.h5).
+
+
+    # Random Forest
+
+    Le fichier main_RandomForest.py est conçu pour être configurable et permet d'intéragir avec le modèle et choisir les sorties souhaitées, permettant de reproduire tous les tests de l'analyse de sensibilité présentés dans ce rapport. Il fait appel aux fonctions écrites dans le fichier RandomForest.py. 
+    Il se décompose en 4 parties indépendantes. Dans chaque partie, les éléments d'entrée sont modifiables (#Modifiable). L'appel aux fonctions ne doit pas être modifié, mais il est possible de les commenter si on ne souhaite pas afficher les résultats ou si on veut gagner du temps de calcul. 
+
+        - Une partie pour obtenir les résultats de la méthode Gridsearch pour trouver les meilleurs paramètres parmi une grille. 
+
+        - Une partie pour obtenir les scores de prédiction par validation croisée LOSO ainsi que la matrice de confusion et les courbes ROC et Precision-Recall. Il est possible d'afficher également les scores et la matrice de confusion pour une validation croisée 10-folds. Le modèle peut être modifié. Par défaut, il s'agit du résultat issu de Gridsearch avec les meilleurs paramètres.
+
+        - Une partie pour étudier l'influence des paramètres et obtenir les courbes d'accuracy pour les jeux d'entraînement et de test ainsi que l'impureté de Gini moyenne de la forêt en fonction de la valeur du paramètre étudié. Par défaut, la méthode LOSO est utilisée avec tous les sujets, mais il est possible de ne choisir que quelques sujets, notammetn pour réduire les temps de calcul.
+
+        - Une partie pour afficher l'impureté de Gini moyenne par arbre pour un unique entraînement sur 7 des 8 sujets et test sur le 8ème sujet.
+
+    Il suffit ensuite d'exécuter le fichier. Pour chaque exécution, le script va :
+        Afficher dans la console les métriques clés demandées
+        Afficher les graphes demandés
+
+# Prérequis 
+
+Python 3.8
+
+Bibliothèques :
+    numpy
+    matplotlib
+    scikit-learn
+    keras
+    os
+    seaborn
+    time
+    pandas
+    collections
+    joblib
+    tensorflow
+Pour installer toutes les bibiothèques: pip install tensorflow numpy pandas matplotlib seaborn scikit-learn joblib os time collections
 
 
 # Data base description
+The data are from a public database : https://archive.ics.uci.edu/dataset/256/daily+and+sports+activities
+
+
 Each of the 19 activities is performed by eight subjects (4 female, 4 male, between the ages 20 and 30) for 5 minutes.
 
 Total signal duration is 5 minutes for each activity of each subject.
@@ -11,7 +76,6 @@ The subjects are asked to perform the activities in their own style and were not
 The activities are performed at the Bilkent University Sports Hall, in the Electrical and Electronics Engineering Building, 
 
 and in a flat outdoor area on campus. Sensor units are calibrated to acquire data at 25 Hz sampling frequency. The 5-min signals are divided into 5-sec segments so that 480(=60x8) signal segments are obtained for each activity.
-
 
 
 The 19 activities are: 

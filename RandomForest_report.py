@@ -80,14 +80,7 @@ rf_base = RandomForestClassifier(random_state=RANDOM_STATE)
 
 # --- Déterminer les meilleurs paramètres pour le modèle ---
 
-def best_model():
-    param_grid = {
-        'n_estimators': [100,200],
-        'max_depth': [None, 10, 20],
-        'min_samples_split': [2, 5],
-        'min_samples_leaf': [1, 2, 4],
-        'bootstrap': [True, False]
-    }
+def best_model(param_grid):
 
     # --- Leave-One-Subject-Out cross-validation ---
     cv = LeaveOneGroupOut()
@@ -110,7 +103,13 @@ def best_model():
     return grid_search
 
 
-# grid_search = best_model()
+# grid_search = best_model(param_grid = {
+#         'n_estimators': [100,200],
+#         'max_depth': [None, 10, 20],
+#         'min_samples_split': [2, 5],
+#         'min_samples_leaf': [1, 2, 4],
+#         'bootstrap': [True, False]
+#     })
 # best_rf = grid_search.best_estimator_
 # print(best_rf)
 
@@ -119,7 +118,7 @@ best_rf = RandomForestClassifier(random_state=RANDOM_STATE, bootstrap= True, max
 
 ## -- Vallidation croisée LOSO et matrice de confusion ---
 
-def validation_LOSO():
+def validation_LOSO(rf):
 
     logo = LeaveOneGroupOut()
 
@@ -127,7 +126,7 @@ def validation_LOSO():
     y_true_all = []
     y_pred_all = []
     y_score_all = [] #pour ROC et Precision-Recall
-    target_classes = np.arange(0, 19)
+    target_classes = np.arange(0, 19) #pour ROC et Precision-Recall
 
     for train_idx, test_idx in logo.split(X_raw, y, groups):
         print(f"--- Test sur groupe {groups[test_idx][0]} ---")
@@ -137,7 +136,7 @@ def validation_LOSO():
         y_train, y_test = y[train_idx], y[test_idx]
 
         # Nouveau modèle à chaque itération
-        model = best_rf
+        model = rf
 
         # Entraînement
         debut=time.time()
@@ -188,6 +187,44 @@ def plot_confusion(cm):
 # print(cm)
 # plot_confusion(cm)
 
+### -- Validation croisée Stratified k-fold (pour comparaison) et matrice de confusion
+
+def validiation_croisée(rf):
+
+    X_train, X_test, y_train, y_test = train_test_split(X_raw, y, test_size=0.2, random_state=RANDOM_STATE, stratify=y)
+    print("Démarage de la validation croisée")
+    cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=RANDOM_STATE)
+    scores = cross_val_score(rf, X_train, y_train, cv=cv, scoring="accuracy")
+    print(scores)
+    print("Accuracy moyenne CV :", scores.mean())
+    print("Écart type CV :", scores.std())
+
+def CM(rf):
+    X_train, X_test, y_train, y_test = train_test_split(X_raw, y, test_size=0.2, random_state=RANDOM_STATE, stratify=y)
+    rf.fit(X_train, y_train)
+    y_pred = best_rf.predict(X_test)
+
+    print("\n--- Évaluation sur le jeu de test ---")
+    print("Accuracy :", accuracy_score(y_test, y_pred))
+    print("\nClassification Report:\n", classification_report(y_test, y_pred))
+
+    # # Comparaison avec accuracy d'entraînement (détecter du sur-apprentissage)
+    train_acc = accuracy_score(y_train, best_rf.predict(X_train))
+    test_acc = accuracy_score(y_test, y_pred)
+    print(f"Accuracy entraînement : {train_acc:.3f}")
+    print(f"Accuracy test : {test_acc:.3f}")
+
+    # --- 7. Matrice de confusion ---
+    cm_test = confusion_matrix(y_test, y_pred)
+    plt.figure(figsize=(12, 10))
+    sns.heatmap(cm_test, annot=True, fmt='d', cmap='Blues', 
+                xticklabels=[f"A{i+1}" for i in range(num_classes)], 
+                yticklabels=[f"A{i+1}" for i in range(num_classes)])
+    plt.title('Matrice de Confusion Finale sur le Test Set')
+    plt.xlabel('Prédictions')
+    plt.ylabel('Vraies étiquettes (Labels)')
+    plt.show()
+
 ###--- Impureté de Gini ---
 
 def foret_gini(trained_rf):
@@ -211,9 +248,10 @@ def plot_gini(rf):
     plt.show()
     
 
-#X_train,X_test,y_train,y_test=Train_Test(2)
-#best_rf.fit(X_train,y_train)
-#plot_gini(best_rf)
+def calcul_gini(sujet, rf):
+    X_train,X_test,y_train,y_test=Train_Test(2)
+    rf.fit(X_train,y_train)
+    plot_gini(rf)
 
 
 ##--- Effet de 3 paramètres : nombre d'arbres, nombre min d'échantillons par feuille et profondeur max ---
@@ -391,8 +429,6 @@ def Influence_max_depth_LOSO(sujets_exclus):
 
     plt.show()
 
-
-
 #Influence_n_estimators_LOSO([1,2,3,4,5,6,7,8])
 #Influence_nleaf_LOSO([1,2,3,4,5,6,7,8])
 #Influence_max_depth_LOSO([1,2,3,4,5,6,7,8])
@@ -442,11 +478,6 @@ def plot_PR(y_true_all, y_score_all):
     plt.grid(True)
     plt.show()
 
-cm, y_true_all,y_score_all = validation_LOSO()
-print(y_score_all.shape)   # doit être (N_total, 19)
-print(y_score_all[:5,:])   # probabilités entre 0 et 1
-print(y_true_all[:5]) 
-#print(y_true_bin[:5,:])
-
-plot_ROC(y_true_all,y_score_all)
-plot_PR(y_true_all,y_score_all)
+#cm, y_true_all,y_score_all = validation_LOSO()
+# plot_ROC(y_true_all,y_score_all)
+# plot_PR(y_true_all,y_score_all)
